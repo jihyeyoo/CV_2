@@ -12,8 +12,6 @@ from problem1 import constant_disparity
 
 def rgb2gray(rgb):
     """Converting RGB image to greyscale.
-    The same as in Assignment 1 (no graded here).
-
     Args:
         rgb: numpy array of shape (H, W, 3)
 
@@ -21,6 +19,13 @@ def rgb2gray(rgb):
         gray: numpy array of shape (H, W)
 
     """
+    height, width = rgb.shape[:2]
+	gray = np.zeros((height, width), dtype=np.float64)
+	weights = [0.2126, 0.7152, 0.0722]
+	for i in range(height):
+		for j in range(width):
+			# execute dot product of r,g,b values and their weights.
+			gray[i][j] = np.dot(rgb[i, j, :], weights)
     return gray
 
 

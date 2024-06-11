@@ -3,76 +3,64 @@ import numpy as np
 np.random.seed(seed=2024)
 
 def load_data(gt_path):
-    """Loading the data.
-    The same as loading the disparity from Assignment 1 
-    (not graded here).
-
-    Args:
-        gt_path: path to the disparity image
-    
-    Returns:
-        g_t: numpy array of shape (H, W)
-    """
+    g_t = np.array(Image.open(gt_path), dtype=np.float64)
     return g_t
 
 def random_disparity(disparity_size):
-    """Compute a random disparity map.
-
-    Args:
-        disparity_size: tuple containg height and width (H, W)
-
-    Returns:
-        disparity_map: numpy array of shape (H, W)
-
     """
+    Args: disparity_size: tuple containg height and width (H, W)
+    Returns: disparity_map: numpy array of shape (H, W)
+    """
+    disparity_map=np.random.randint(0,16,size=disparity_size).astype(np.float64)
     return disparity_map
 
 def constant_disparity(disparity_size, a):
-    """Compute a constant disparity map.
-
-    Args:
-        disparity_size: tuple containg height and width (H, W)
-        a: the value to initialize with
-
-    Returns:
-        disparity_map: numpy array of shape (H, W)
-
     """
+    Args: disparity_size: tuple containg height and width (H, W)
+          a: value to initialize with
+    Returns: disparity_map: numpy array of shape (H, W)
+    """
+    disparity_map = np.full(disparity_size, a, dtype=np.float64)
     return disparity_map
 
 
 def log_gaussian(x, mu, sigma):
     """Compute the log gaussian of x.
-
-    Args:
-        x: numpy array of shape (H, W) (np.float64)
+    Args: x: numpy array of shape (H, W) (np.float64)
         mu: float
         sigma: float
-
-    Returns:
-        result: numpy array of shape (H, W) (np.float64)
-
+    Returns: result: numpy array of shape (H, W) (np.float64)
     """
+    result= -((x - mu) *(x - mu)) / (2 * sigma * sigma)
     return result
 
 
 def mrf_log_prior(x, mu, sigma):
     """Compute the log of the unnormalized MRF prior density.
-
-    Args:
-        x: numpy array of shape (H, W) (np.float64)
+    Args: x: numpy array of shape (H, W) (np.float64)
         mu: float
         sigma: float
-
-    Returns:
-        logp: float
-
+    Returns: logp: float
     """
+    H, W = x.shape
+    logp = 0.0
+
+    # W
+    for i in range(H):
+        for j in range(W - 1):
+            logp += log_gaussian(x[i, j + 1] - x[i, j], mu, sigma)
+
+    # H
+    for i in range(H - 1):
+        for j in range(W):
+            logp += log_gaussian(x[i + 1, j] - x[i, j], mu, sigma)
+
     return logp
 
 # Example usage in main()
 # Feel free to experiment with your code in this function
 # but make sure your final submission can execute this code
+
 def main():
 
     gt = load_data('./data/gt.png')
