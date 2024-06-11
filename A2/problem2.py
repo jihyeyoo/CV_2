@@ -20,87 +20,98 @@ def rgb2gray(rgb):
 
     """
     height, width = rgb.shape[:2]
-	gray = np.zeros((height, width), dtype=np.float64)
-	weights = [0.2126, 0.7152, 0.0722]
-	for i in range(height):
-		for j in range(width):
+    gray = np.zeros((height, width), dtype=np.float64)
+    weights = [0.2126, 0.7152, 0.0722]
+    for i in range(height):
+         for j in range(width):
 			# execute dot product of r,g,b values and their weights.
-			gray[i][j] = np.dot(rgb[i, j, :], weights)
+            gray[i][j] = np.dot(rgb[i, j, :], weights)
     return gray
 
 
 def load_data(i0_path, i1_path, gt_path):
-    """Loading the data.
-    The same as in Assignment 1 (not graded here).
-
-    Args:
-        i0_path: path to the first image
-        i1_path: path to the second image
-        gt_path: path to the disparity image
-    
-    Returns:
-        i_0: numpy array of shape (H, W)
-        i_1: numpy array of shape (H, W)
-        g_t: numpy array of shape (H, W)
+    """Loading data.
+    Args: i0_path: path to the first image
+          i1_path: path to the second image
+          gt_path: path to the disparity image
+    Returns: i_0: numpy array of shape (H, W)
+             i_1: numpy array of shape (H, W)
+             g_t: numpy array of shape (H, W)
     """
+    i_0 = np.array(Image.open(i0_path), dtype=np.float64)/255.0
+    i_1 = np.array(Image.open(i1_path), dtype=np.float64)/255.0
+    g_t = np.array(Image.open(gt_path), dtype=np.float64)
     return i_0, i_1, g_t
 
 def log_gaussian(x,  mu, sigma):
-    """Calcuate the value and the gradient w.r.t. x of the Gaussian log-density
-
-    Args:
-        x: numpy.float 2d-array
-        mu and sigma: scalar parameters of the Gaussian
-
-    Returns:
-        value: value of the log-density
-        grad: gradient of the log-density w.r.t. x
+    """Calcuate value & gradient w.r.t. x of Gaussian log-density
+    Args: x : numpy.float 2d-array
+          mu & sigma : scalar parameters of Gaussian
+    Returns: value: value of the log-density
+             grad: gradient of the log-density w.r.t. x
     """
-    # return the value and the gradient
+    value = -((x - mu) *(x - mu)) / (2 * sigma *sigma)
+    grad = -(x - mu) / (sigma *sigma)
     return value, grad
 
 def stereo_log_prior(x, mu, sigma):
     """Evaluate gradient of pairwise MRF log prior with Gaussian distribution
-
-    Args:
-        x: numpy.float 2d-array (disparity)
-
-    Returns:
-        value: value of the log-prior
-        grad: gradient of the log-prior w.r.t. x
+    Args: x: numpy.float 2d-array (disparity)
+    Returns: value: value of the log-prior
+             grad: gradient of the log-prior w.r.t. x
     """
+    H, W = x.shape
+    value = 0.0
+    grad = np.zeros_like(x)
+    
+    for i in range(H):
+        for j in range(W - 1):
+            v, g = log_gaussian(x[i, j + 1] - x[i, j], mu, sigma)
+            value += v
+            grad[i, j] -= g
+            grad[i, j + 1] += g
+    
+    for i in range(H - 1):
+        for j in range(W):
+            v, g = log_gaussian(x[i + 1, j] - x[i, j], mu, sigma)
+            value += v
+            grad[i, j] -= g
+            grad[i + 1, j] += g
 
     return  value, grad
 
 def shift_interpolated_disparity(im1, d):
-    """Shift image im1 by the disparity value d.
+    """Shift im1 by d.
     Since disparity can now be continuous, use interpolation.
-
-    Args:
-        im1: numpy.float 2d-array  input image
-        d: numpy.float 2d-array  disparity
-
-    Returns:
-        im1_shifted: Shifted version of im1 by the disparity value.
+    Args: im1: numpy.float 2d-array  input image
+          d: numpy.float 2d-array  disparity
+    Returns:  im1_shifted
     """
-
-    return shifted_im1
+    H, W = im1.shape
+    im1_shifted= np.zeros(im1.shape, dtype=float)
+    for i in range(H):
+         for j in range(W):
+            new_j = j - int(d[i][j])
+            if new_j >= W or new_j < 0:
+                print("boundary exceeded!\n")
+                exit(-1)
+            im1_shifted[i][j] = im1[i][new_j]
+    return im1_shifted
 
 def stereo_log_likelihood(x, im0, im1, mu, sigma):
-    """Evaluate gradient of the log likelihood.
-
-    Args:
-        x: numpy.float 2d-array of the disparity
-        im0: numpy.float 2d-array of image #0
-        im1: numpy.float 2d-array of image #1
-
-    Returns:
-        value: value of the log-likelihood
-        grad: gradient of the log-likelihood w.r.t. x
-
-    Hint: Make use of shift_interpolated_disparity and log_gaussian
+    """Evaluate gradient of log likelihood.
+    Args: x: numpy.float 2d-array of the disparity
+          im0: numpy.float 2d-array of image #0
+          im1: numpy.float 2d-array of image #1
+    Returns: value: value of the log-likelihood
+             grad: gradient of the log-likelihood w.r.t. x
+    Hint: Use shift_interpolated_disparity and log_gaussian
     """
-
+    value=0.0
+    shifted_im1 = shift_interpolated_disparity(im1, x)
+    diff = im0 - shifted_im1
+    v, grad = log_gaussian(diff, mu, sigma)
+    value+=v
     return value, grad
 
 
@@ -129,7 +140,7 @@ def optim_method():
     return None
 
 def stereo(d0, im0, im1, mu, sigma, alpha, method=optim_method()):
-    """Estimating the disparity map
+    """Estimate disparity map
 
     Args:
         d0: numpy.float 2d-array initialisation of the disparity

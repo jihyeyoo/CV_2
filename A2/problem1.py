@@ -23,12 +23,11 @@ def constant_disparity(disparity_size, a):
     disparity_map = np.full(disparity_size, a, dtype=np.float64)
     return disparity_map
 
-
 def log_gaussian(x, mu, sigma):
     """Compute the log gaussian of x.
     Args: x: numpy array of shape (H, W) (np.float64)
-        mu: float
-        sigma: float
+          mu: float
+          sigma: float
     Returns: result: numpy array of shape (H, W) (np.float64)
     """
     result= -((x - mu) *(x - mu)) / (2 * sigma * sigma)
@@ -54,6 +53,8 @@ def mrf_log_prior(x, mu, sigma):
     for i in range(H - 1):
         for j in range(W):
             logp += log_gaussian(x[i + 1, j] - x[i, j], mu, sigma)
+
+    logp = np.sum(logp)
 
     return logp
 
