@@ -83,3 +83,30 @@ def main():
 if __name__ == "__main__":
 	main()
 
+"""
+1. Compare values of log-prior density for three disparity maps
+Result: Log Prior of GT disparity map: -50685.12396694026
+        Log-prior of noisy disparity map: -3896875.619835017
+        Log-prior of constant disparity map: 0.0
+
+1-1. GT Disparity Map
+has the lowest (least negative) log-prior density among the three maps. 
+This indicates that the MRF model considers the GT disparity map to be relatively consistent and plausible. 
+The low negative value suggests that the GT disparity map has small differences between neighboring pixels, which aligns well with the Gaussian potentials used in the model.
+
+1-2. Noisy disparity map
+Significantly higher (more negative) log-prior density.
+MRF model finds the noisy disparity map to be highly inconsistent and implausible. 
+The large negative value indicates substantial differences between neighboring pixels, which the Gaussian potentials penalize heavily, reflecting the noise and inconsistency in the disparity values.
+
+1-3. Constant Disparity Map
+There are no differences between neighboring pixels, leading to no penalization by the Gaussian potentials. 
+MRF model considers this map to be perfectly consistent.
+
+2. Increasing σ of the Gaussian potentials
+Increasing σ means that it penalizes the disparity less, so 
+
+3. Reducing the range of the noise map, e.g. to [0,4]
+Reducing the range of noise means that 
+"""
+
