@@ -13,6 +13,7 @@ def load_data(gt_path):
     Returns:
         g_t: numpy array of shape (H, W)
     """
+    g_t = np.array(Image.open(gt_path), dtype=np.float64)
     return g_t
 
 def random_disparity(disparity_size):
@@ -25,6 +26,7 @@ def random_disparity(disparity_size):
         disparity_map: numpy array of shape (H, W)
 
     """
+    disparity_map = np.random.randint(0, 16, size=disparity_size).astype(np.float64)
     return disparity_map
 
 def constant_disparity(disparity_size, a):
@@ -38,6 +40,7 @@ def constant_disparity(disparity_size, a):
         disparity_map: numpy array of shape (H, W)
 
     """
+    disparity_map = np.full(disparity_size, a, dtype=np.float64)
     return disparity_map
 
 
@@ -53,6 +56,7 @@ def log_gaussian(x, mu, sigma):
         result: numpy array of shape (H, W) (np.float64)
 
     """
+    result = -((x - mu) ** 2) / (2 * sigma ** 2)
     return result
 
 
@@ -68,6 +72,19 @@ def mrf_log_prior(x, mu, sigma):
         logp: float
 
     """
+    H, W = x.shape
+    logp = 0.0
+
+    # Compute horizontal potentials
+    for i in range(H):
+         for j in range(W-1):
+              log_prior += log_gaussian(x[i, j+1] - x[i, j], mu, sigma)
+
+    # Compute vertical potentials
+    for i in range(H-1):
+         for j in range(W):
+              log_prior += log_gaussian(x[i+1, j] - x[i, j], mu, sigma)
+
     return logp
 
 # Example usage in main()

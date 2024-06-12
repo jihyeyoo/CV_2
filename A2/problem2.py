@@ -21,6 +21,14 @@ def rgb2gray(rgb):
         gray: numpy array of shape (H, W)
 
     """
+    height, width = rgb.shape[:2]
+    gray = np.zeros((height, width), dtype=np.float64)
+    weights = [0.2126, 0.7152, 0.0722]
+    for i in range(height):
+        for j in range(width):
+			# execute dot product of r,g,b values and their weights.
+            gray[i][j] = np.dot(rgb[i, j, :], weights)
+
     return gray
 
 
@@ -38,6 +46,11 @@ def load_data(i0_path, i1_path, gt_path):
         i_1: numpy array of shape (H, W)
         g_t: numpy array of shape (H, W)
     """
+    # read the image data and divide the i_0 and i_1 values by 255 to normalize to [0,1]
+    i_0 = np.array(Image.open(i0_path), dtype=np.float64)/255.0
+    i_1 = np.array(Image.open(i1_path), dtype=np.float64)/255.0
+    g_t = np.array(Image.open(gt_path), dtype=np.float64)
+
     return i_0, i_1, g_t
 
 def log_gaussian(x,  mu, sigma):
@@ -52,6 +65,8 @@ def log_gaussian(x,  mu, sigma):
         grad: gradient of the log-density w.r.t. x
     """
     # return the value and the gradient
+    value = -((x - mu) ** 2) / (2 * sigma ** 2)
+    grad = -(x - mu) / (sigma ** 2)
     return value, grad
 
 def stereo_log_prior(x, mu, sigma):
@@ -64,6 +79,25 @@ def stereo_log_prior(x, mu, sigma):
         value: value of the log-prior
         grad: gradient of the log-prior w.r.t. x
     """
+    H, W = x.shape
+    logp = 0
+    grad = np.zeros_like(x)
+
+    # Compute horizontal potentials and gradients
+    for i in range(H):
+        for j in range(W-1):
+            val, gradient = log_gaussian(x[i, j+1] - x[i, j], mu, sigma)
+            value += val
+            grad[i, j] -= gradient
+            grad[i, j + 1] += gradient
+
+    # Compute vertical potentials and gradients
+    for i in range(H-1):
+        for j in range(W):
+            val, gradient = log_gaussian(x[i + 1, j] - x[i, j], mu, sigma)
+            value += val
+            grad[i, j] -= gradient
+            grad[i + 1, j] += gradient
 
     return  value, grad
 
@@ -78,7 +112,12 @@ def shift_interpolated_disparity(im1, d):
     Returns:
         im1_shifted: Shifted version of im1 by the disparity value.
     """
-
+    H, W = im1.shape
+    coords = np.array(np.meshgrid(np.arange(H), np.arange(W), indexing='ij'))
+    coords[1] -= d
+    interpolator = interpolate.RegularGridInterpolator((np.arange(H), np.arange(W)), im1, bounds_error=False, fill_value=0)
+    shifted_im1 = interpolator(coords.transpose(1, 2, 0))
+    
     return shifted_im1
 
 def stereo_log_likelihood(x, im0, im1, mu, sigma):
@@ -95,6 +134,9 @@ def stereo_log_likelihood(x, im0, im1, mu, sigma):
 
     Hint: Make use of shift_interpolated_disparity and log_gaussian
     """
+    shifted_im1 = shift_interpolated_disparity(im1, x)
+    diff =  im0 - shifted_im1
+    value, grad = log_gaussian(diff, mu, sigma)
 
     return value, grad
 
@@ -111,7 +153,11 @@ def stereo_log_posterior(d, im0, im1, mu, sigma, alpha):
         value: value of the log-posterior
         grad: gradient of the log-posterior w.r.t. x
     """
-
+    log_prior, grad_prior = stereo_log_prior(d, mu, sigma)
+    log_likelihood, grad_likelihood = stereo_log_likelihood(d, im0, im1, mu, sigma)
+    log_posterior = log_likelihood + alpha * log_prior
+    log_posterior_grad = grad_likelihood + alpha * grad_prior
+    
     return log_posterior, log_posterior_grad
 
 
