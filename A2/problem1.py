@@ -104,9 +104,14 @@ There are no differences between neighboring pixels, leading to no penalization 
 MRF model considers this map to be perfectly consistent.
 
 2. Increasing σ of the Gaussian potentials
-Increasing σ means that it penalizes the disparity less, so 
+Increasing σ means that it penalizes the disparity less.
 
 3. Reducing the range of the noise map, e.g. to [0,4]
-Reducing the range of noise means that 
+Reducing the range of noise means that the possible disparity values that neighboring pixels can take become more constrained.
+Smaller differences between neighboring pixels result in smaller penalties imposed by the Gaussian potentials in the MRF model. 
+Penalties are calculated based on the squared differences between neighboring pixels divided by the variance (σ²) of the Gaussian potentials. 
+With smaller disparities due to reduced noise range, these penalties diminish, leading to a less negative log-prior density.
+MRF model perceives disparity map with reduced noise range as more consistent and plausible because neighboring disparities are closer to each other. 
+This perception aligns with model's expectation that neighboring pixels in a disparity map should have similar values, reflecting smooth transitions in depth across the image.
 """
 
