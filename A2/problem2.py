@@ -9,7 +9,6 @@ from PIL import Image           # For loading images
 from problem1 import random_disparity
 from problem1 import constant_disparity
 
-
 def rgb2gray(rgb):
     """Converting RGB image to greyscale.
     Args:
@@ -27,7 +26,6 @@ def rgb2gray(rgb):
 			# execute dot product of r,g,b values and their weights.
             gray[i][j] = np.dot(rgb[i, j, :], weights)
     return gray
-
 
 def load_data(i0_path, i1_path, gt_path):
     """Loading data.
@@ -88,15 +86,15 @@ def shift_interpolated_disparity(im1, d):
     Returns:  im1_shifted
     """
     H, W = im1.shape
-    im1_shifted= np.zeros(im1.shape, dtype=float)
+    shifted_im1= np.zeros(im1.shape, dtype=float)
     for i in range(H):
          for j in range(W):
             new_j = j - int(d[i][j])
             if new_j >= W or new_j < 0:
                 print("boundary exceeded!\n")
                 exit(-1)
-            im1_shifted[i][j] = im1[i][new_j]
-    return im1_shifted
+            shifted_im1[i][j] = im1[i][new_j]
+    return shifted_im1
 
 def stereo_log_likelihood(x, im0, im1, mu, sigma):
     """Evaluate gradient of log likelihood.
@@ -114,19 +112,20 @@ def stereo_log_likelihood(x, im0, im1, mu, sigma):
     value+=v
     return value, grad
 
-
 def stereo_log_posterior(d, im0, im1, mu, sigma, alpha):
-    """Computes the value and the gradient of the log-posterior
-
-    Args:
-        d: numpy.float 2d-array of the disparity
-        im0: numpy.float 2d-array of image #0
-        im1: numpy.float 2d-array of image #1
-
+    """Computes value & gradient of log-posterior
+    Args: d: numpy.float 2d-array of the disparity
+          im0: numpy.float 2d-array of image #0
+          im1: numpy.float 2d-array of image #1
     Returns:
         value: value of the log-posterior
         grad: gradient of the log-posterior w.r.t. x
     """
+    prior_value, prior_grad = stereo_log_prior(d, mu, sigma)
+    likelihood_value, likelihood_grad = stereo_log_likelihood(d, im0, im1, mu, sigma)
+    
+    log_posterior = likelihood_value + alpha * prior_value
+    log_posterior_grad = likelihood_grad + alpha * prior_grad
 
     return log_posterior, log_posterior_grad
 
@@ -147,8 +146,8 @@ def stereo(d0, im0, im1, mu, sigma, alpha, method=optim_method()):
         im0: numpy.float 2d-array of image #0
         im1: numpy.float 2d-array of image #1
 
-    Returns:
-        d: numpy.float 2d-array estimated value of the disparity
+    Returns: d: numpy.float 2d-array estimated value of the disparity
+        
     """
 
     return d0
