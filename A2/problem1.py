@@ -11,7 +11,7 @@ def random_disparity(disparity_size):
     Args: disparity_size: tuple containg height and width (H, W)
     Returns: disparity_map: numpy array of shape (H, W)
     """
-    disparity_map=np.random.randint(0,16,size=disparity_size).astype(np.float64)
+    disparity_map=np.random.randint(0,5,size=disparity_size).astype(np.float64)
     return disparity_map
 
 def constant_disparity(disparity_size, a):

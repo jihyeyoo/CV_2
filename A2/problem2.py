@@ -5,6 +5,7 @@ from scipy import signal        # Feel free to use convolutions, if needed
 from scipy import optimize      # For gradient-based optimisation
 from PIL import Image           # For loading images
 from scipy.interpolate import interp2d
+from scipy.optimize import minimize
 
 # for experiments with different initialisation
 from problem1 import random_disparity
@@ -58,7 +59,7 @@ def stereo_log_prior(x, mu, sigma):
     # log prior
     value = 0.0
     # array to store grad
-    grad = np.zeros_like(x)
+    grad = np.zeros(x.shape)
 
     for i in range(x.shape[0]):
         for j in range(x.shape[1]):
@@ -140,28 +141,24 @@ def stereo(d0, im0, im1, mu, sigma, alpha, method=optim_method()):
           im0: numpy.float 2d-array of image #0
           im1: numpy.float 2d-array of image #1
     Returns: d: numpy.float 2d-array estimated value of the disparity
-        
     """
-    def stereo_log_posterior(d):
-        """Compute log-posterior and its gradient."""
-        # Implement the computation of log-posterior and gradient here
-        pass
-    
-    # Define objective function: negative log-posterior
+    # Define the objective function for minimize
     def objective_function(d):
-        log_posterior, log_posterior_grad = stereo_log_posterior(d.reshape(d0.shape))
-        return -log_posterior, -log_posterior_grad.flatten()
-    
-    # Optimize using scipy.optimize.minimize
-    result = minimize(objective_function, d0.flatten(), method=method, jac=True)
-    
-    # Extract optimized disparity map
-    d = result.x.reshape(d0.shape)
+        return stereo_log_posterior(d, im0, im1, mu, sigma, alpha)
 
-    return d0
+    # Initial guess of the disparity map
+    initial_guess = d0.flatten()
 
+    # Minimize the objective function using the specified method
+    result = minimize(objective_function, initial_guess, method=method, jac=True)
+
+    # Reshape the optimized result back to 2D array
+    d_optimized = result.x.reshape(d0.shape)
+
+    return d_optimized
+"""
 def coarse2fine(d0, im0, im1, mu, sigma, alpha, num_levels):
-    """Coarse-to-fine estimation strategy. Basic idea:
+    Coarse-to-fine estimation strategy. Basic idea:
         1. create an image pyramid (of size num_levels)
         2. starting with the lowest resolution, estimate disparity
         3. proceed to the next resolution using the estimated 
@@ -177,7 +174,7 @@ def coarse2fine(d0, im0, im1, mu, sigma, alpha, num_levels):
         disparities at each level (from finest to coarsest)
         Sanity check: pyramid[0] contains the finest level (highest resolution)
                       pyramid[-1] contains the coarsest level
-    """
+    
     pyramid = []
     current_d = d0
     
@@ -193,6 +190,7 @@ def coarse2fine(d0, im0, im1, mu, sigma, alpha, num_levels):
         # Upscale current disparity map for initialization at the next level
         current_d = upscale(current_d)
     return pyramid
+    """
 
 # Example usage in main()
 # Feel free to experiment with your code in this function
@@ -200,7 +198,6 @@ def coarse2fine(d0, im0, im1, mu, sigma, alpha, num_levels):
 def main():
 
     # these are the same functions from Assignment 1
-    # (no graded in this assignment)
     im0, im1, gt = load_data('./data/i0.png', './data/i1.png', './data/gt.png')
     im0, im1 = rgb2gray(im0), rgb2gray(im1)
 
@@ -220,8 +217,8 @@ def main():
     disparity = stereo(d0, im0, im1, mu, sigma, alpha)
 
     # Pyramid
-    num_levels = 3
-    pyramid = coarse2fine(d0, im0, im1, mu, sigma, num_levels)
+    # num_levels = 3
+    # pyramid = coarse2fine(d0, im0, im1, mu, sigma, num_levels)
 
 if __name__ == "__main__":
     main()
