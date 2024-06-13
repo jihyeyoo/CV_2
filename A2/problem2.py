@@ -97,7 +97,7 @@ def shift_interpolated_disparity(im1, d):
     return shifted_im1
 
 def stereo_log_likelihood(x, im0, im1, mu, sigma):
-    """Evaluate gradient of log likelihood.
+    """Evaluate gradient of log likelihood.=> logp(im0∣im1,d)
     Args: x: numpy.float 2d-array of the disparity
           im0: numpy.float 2d-array of image #0
           im1: numpy.float 2d-array of image #1
@@ -105,15 +105,13 @@ def stereo_log_likelihood(x, im0, im1, mu, sigma):
              grad: gradient of the log-likelihood w.r.t. x
     Hint: Use shift_interpolated_disparity and log_gaussian
     """
-    value=0.0
     shifted_im1 = shift_interpolated_disparity(im1, x)
     diff = im0 - shifted_im1
-    v, grad = log_gaussian(diff, mu, sigma)
-    value+=v
+    value, grad = log_gaussian(diff, mu, sigma)
     return value, grad
 
 def stereo_log_posterior(d, im0, im1, mu, sigma, alpha):
-    """Computes value & gradient of log-posterior
+    """Computes value & gradient of log-posterior=>logp(d∣im0,im1)∝logp(im0∣im1,d)+αlogp(d)
     Args: d: numpy.float 2d-array of the disparity
           im0: numpy.float 2d-array of image #0
           im1: numpy.float 2d-array of image #1
@@ -121,14 +119,13 @@ def stereo_log_posterior(d, im0, im1, mu, sigma, alpha):
         value: value of the log-posterior
         grad: gradient of the log-posterior w.r.t. x
     """
-    prior_value, prior_grad = stereo_log_prior(d, mu, sigma)
-    likelihood_value, likelihood_grad = stereo_log_likelihood(d, im0, im1, mu, sigma)
+    log_prior_value, log_prior_grad = stereo_log_prior(d, mu, sigma)
+    log_likelihood_value, log_likelihood_grad = stereo_log_likelihood(d, im0, im1, mu, sigma)
     
-    log_posterior = likelihood_value + alpha * prior_value
-    log_posterior_grad = likelihood_grad + alpha * prior_grad
+    log_posterior = log_likelihood_value + alpha * log_prior_value
+    log_posterior_grad = log_likelihood_grad + alpha * log_prior_grad
 
     return log_posterior, log_posterior_grad
-
 
 def optim_method():
     """Simply returns the name (string) of the method 
@@ -140,12 +137,9 @@ def optim_method():
 
 def stereo(d0, im0, im1, mu, sigma, alpha, method=optim_method()):
     """Estimate disparity map
-
-    Args:
-        d0: numpy.float 2d-array initialisation of the disparity
-        im0: numpy.float 2d-array of image #0
-        im1: numpy.float 2d-array of image #1
-
+    Args: d0: numpy.float 2d-array initialisation of the disparity
+          im0: numpy.float 2d-array of image #0
+          im1: numpy.float 2d-array of image #1
     Returns: d: numpy.float 2d-array estimated value of the disparity
         
     """
@@ -170,7 +164,6 @@ def coarse2fine(d0, im0, im1, mu, sigma, alpha, num_levels):
         Sanity check: pyramid[0] contains the finest level (highest resolution)
                       pyramid[-1] contains the coarsest level
     """
-
     return []
 
 # Example usage in main()
