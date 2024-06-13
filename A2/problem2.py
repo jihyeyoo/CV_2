@@ -21,6 +21,14 @@ def rgb2gray(rgb):
         gray: numpy array of shape (H, W)
 
     """
+    height, width = rgb.shape[:2]
+    gray = np.zeros((height, width), dtype=np.float64)
+    weights = [0.2126, 0.7152, 0.0722]
+    for i in range(height):
+        for j in range(width):
+            gray[i][j] = np.dot(rgb[i, j, :], weights)
+        # execute dot product of r,g,b values and their weights.
+
     return gray
 
 
@@ -38,6 +46,11 @@ def load_data(i0_path, i1_path, gt_path):
         i_1: numpy array of shape (H, W)
         g_t: numpy array of shape (H, W)
     """
+    # read the image data and divide the i_0 and i_1 values by 255 to normalize to [0,1]
+    i_0 = np.array(Image.open(i0_path), dtype=np.float64) / 255
+    i_1 = np.array(Image.open(i1_path), dtype=np.float64) / 255
+    g_t = np.array(Image.open(gt_path), dtype=np.float64)
+
     return i_0, i_1, g_t
 
 def log_gaussian(x,  mu, sigma):
@@ -51,7 +64,8 @@ def log_gaussian(x,  mu, sigma):
         value: value of the log-density
         grad: gradient of the log-density w.r.t. x
     """
-    # return the value and the gradient
+    value = - (x - mu)**2 / (2*sigma**2)
+    grad = - (x - mu) / sigma**2
     return value, grad
 
 def stereo_log_prior(x, mu, sigma):
@@ -64,6 +78,20 @@ def stereo_log_prior(x, mu, sigma):
         value: value of the log-prior
         grad: gradient of the log-prior w.r.t. x
     """
+
+    dh = x[:, 1:] - x[:, :-1]
+    dv = x[1:, :] - x[:-1, :]
+
+    fh, gradient_h = log_gaussian(dh, mu, sigma)
+    fv, gradient_v = log_gaussian(dv, mu, sigma)
+
+    value = np.sum(fh) + np.sum(fv)
+    grad = np.zeros(x.shape)
+
+    grad[:, :-1] += gradient_h
+    grad[:, 1:] += gradient_h
+    grad[:-1, :] += gradient_v
+    grad[1:, :] += gradient_v
 
     return  value, grad
 
@@ -78,6 +106,35 @@ def shift_interpolated_disparity(im1, d):
     Returns:
         im1_shifted: Shifted version of im1 by the disparity value.
     """
+
+    def bilinear_interpolate(y, x, img):
+        left, top = int(x), int(y)
+        right, bottom = min(left + 1, img.shape[1]-1), min(top + 1, img.shape[0]-1)
+
+        x_lambda, y_lambda = x - left, y - top
+
+        top_x_intp = (1 - x_lambda) * img[top][left] + x_lambda * img[top][right]
+        bottom_x_intp = (1 - x_lambda) * img[bottom][left] + x_lambda * img[bottom][right]
+
+        return (1 - y_lambda) * top_x_intp + y_lambda * bottom_x_intp
+
+
+    shifted_im1 = np.zeros(im1.shape)
+    for i in range(im1.shape[0]):
+        for j in range(im1.shape[1]):
+            new_j = int(j - d[i,j])
+            if new_j >= im1.shape[1]:
+                print(d[i,j])
+            shifted_im1[i][j] = bilinear_interpolate(i, new_j, im1)
+
+            left = int(new_j)
+            top = i
+
+            # shifted_im1[i][j] = interpolate.RegularGridInterpolator(
+            #     points=[(top, left), (top, left + 1), (top+1, left), (top+1, left+1)],
+            #     values = [im1[top, left], im1[top, left+1], im1[top + 1, left], im1[top +1, left+1]],
+            #     fill_value = new_j
+            # )[0]
 
     return shifted_im1
 
@@ -95,7 +152,17 @@ def stereo_log_likelihood(x, im0, im1, mu, sigma):
 
     Hint: Make use of shift_interpolated_disparity and log_gaussian
     """
+    im1_shifted = shift_interpolated_disparity(im1, x)
+    llh, llh_grad = log_gaussian(im0 - im1_shifted, mu, sigma)
 
+    sobel = [
+        [0, 0, 0],
+        [0.5, 0, -0.5],
+        [0, 0, 0]
+    ]
+    im1_x_drv = signal.convolve(im1_shifted, sobel, mode='same')
+    grad = llh_grad * im1_x_drv * -1
+    value = llh.sum()
     return value, grad
 
 
@@ -111,8 +178,14 @@ def stereo_log_posterior(d, im0, im1, mu, sigma, alpha):
         value: value of the log-posterior
         grad: gradient of the log-posterior w.r.t. x
     """
+    d = d.reshape(im0.shape)
+    llh, llh_grad = stereo_log_likelihood(d, im0, im1, mu, sigma)
+    prior, prior_grad = stereo_log_prior(d, mu, sigma)
 
-    return log_posterior, log_posterior_grad
+    log_posterior = llh + alpha * prior
+    log_posterior_grad = llh_grad + alpha * prior_grad
+
+    return log_posterior, log_posterior_grad.flatten()
 
 
 def optim_method():
@@ -121,7 +194,7 @@ def optim_method():
     to work well.
     This is graded with 1 point unless the choice is arbitrary/poor.
     """
-    return None
+    return 'L-BFGS-B'
 
 def stereo(d0, im0, im1, mu, sigma, alpha, method=optim_method()):
     """Estimating the disparity map
@@ -135,6 +208,7 @@ def stereo(d0, im0, im1, mu, sigma, alpha, method=optim_method()):
         d: numpy.float 2d-array estimated value of the disparity
     """
 
+    d0 = optimize.minimize(stereo_log_posterior, d0.flatten(), jac=True, method=method, args=(im0, im1, mu, sigma, alpha))
     return d0
 
 def coarse2fine(d0, im0, im1, mu, sigma, alpha, num_levels):
@@ -156,7 +230,55 @@ def coarse2fine(d0, im0, im1, mu, sigma, alpha, num_levels):
                       pyramid[-1] contains the coarsest level
     """
 
-    return []
+    from scipy import ndimage
+
+
+
+
+    def downsample2(img, f):
+
+        # convolve image and gauss filter
+        smooth_img = signal.convolve(img, f, mode="mirror")
+
+        # take every other row/column
+        downsampled = np.zeros((int(img.shape[0] / 2), int(img.shape[1] / 2)))
+        h, w = downsampled.shape
+
+        for i in range(h):
+            for j in range(w):
+                downsampled[i, j] = smooth_img[i * 2, j * 2]
+
+        return downsampled
+
+    # fill the pyramid first
+    pyr_d = [d0]
+    pyr_im0 = [im0]
+    pyr_im1 = [im1]
+    d = d0
+    i0 = im0
+    i1 = im1
+    for i in range(num_levels):
+        d_f = ndimage.gaussian_filter(d, 1.5, mode='mirror')
+        i0_f = ndimage.gaussian_filter(i0, 1.5, mode='mirror')
+        i1_f = ndimage.gaussian_filter(i1, 1.5, mode='mirror')
+
+        d = downsample2(d, d_f)
+        i0 = downsample2(i0, i0_f)
+        i1 = downsample2(i1, i1_f)
+
+        pyr_d.append(d)
+        pyr_im0.append(i0)
+        pyr_im1.append(i1)
+
+    # do the iteration
+    d = d0
+    for i in range(num_levels):
+        d = stereo(d, pyr_im0[-i], pyr_im1[-i], mu, sigma, alpha)
+        pyr_d[-i] = d
+        # upscale the disparity map
+        d = ndimage.zoom(d, 2, order=3)
+
+    return pyr_d
 
 # Example usage in main()
 # Feel free to experiment with your code in this function
