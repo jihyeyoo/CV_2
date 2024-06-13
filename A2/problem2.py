@@ -117,7 +117,7 @@ def shift_interpolated_disparity(im1, d):
     coords[1] -= d
     interpolator = interpolate.RegularGridInterpolator((np.arange(H), np.arange(W)), im1, bounds_error=False, fill_value=0)
     shifted_im1 = interpolator(coords.transpose(1, 2, 0))
-    
+
     return shifted_im1
 
 def stereo_log_likelihood(x, im0, im1, mu, sigma):
@@ -167,7 +167,7 @@ def optim_method():
     to work well.
     This is graded with 1 point unless the choice is arbitrary/poor.
     """
-    return None
+    return 'L-BFGS-B'
 
 def stereo(d0, im0, im1, mu, sigma, alpha, method=optim_method()):
     """Estimating the disparity map
@@ -180,8 +180,14 @@ def stereo(d0, im0, im1, mu, sigma, alpha, method=optim_method()):
     Returns:
         d: numpy.float 2d-array estimated value of the disparity
     """
-
-    return d0
+    def objective(d):
+        d = d.reshape(d0.shape)
+        log_posterior, grad = stereo_log_posterior(d, im0, im1, mu, sigma, alpha)
+        return -log_posterior, -grad.flatten()
+    
+    result = optimize.minimize(objective, d0.flatten(), jac=True, method=method)
+    d = result.x.reshape(d0.shape)
+    return d
 
 def coarse2fine(d0, im0, im1, mu, sigma, alpha, num_levels):
     """Coarse-to-fine estimation strategy. Basic idea:
@@ -201,8 +207,31 @@ def coarse2fine(d0, im0, im1, mu, sigma, alpha, num_levels):
         Sanity check: pyramid[0] contains the finest level (highest resolution)
                       pyramid[-1] contains the coarsest level
     """
+    pyramid_im0 = [im0]
+    pyramid_im1 = [im1]
+    pyramid_d0 = [d0]
 
-    return []
+    for i in range(1, num_levels):
+        pyramid_im0.append(signal.rescale(pyramid_im0[-1], 0.5, mode='reflect'))
+        pyramid_im1.append(signal.rescale(pyramid_im1[-1], 0.5, mode='reflect'))
+        pyramid_d0.append(signal.rescale(pyramid_d0[-1], 0.5, mode='reflect') / 2)
+
+    pyramid_d0.reverse()
+    pyramid_im0.reverse()
+    pyramid_im1.reverse()
+    
+    disparity_pyramid = []
+
+    d = pyramid_d0[0]
+    for i in range(num_levels):
+        d = stereo(d, pyramid_im0[i], pyramid_im1[i], mu, sigma, alpha)
+        if i < num_levels - 1:
+            d = signal.rescale(d, pyramid_im0[i + 1].shape, mode='reflect') * 2
+        disparity_pyramid.append(d)
+    
+    disparity_pyramid.reverse()
+
+    return disparity_pyramid
 
 # Example usage in main()
 # Feel free to experiment with your code in this function
