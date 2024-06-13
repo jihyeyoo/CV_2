@@ -207,9 +207,7 @@ def coarse2fine(d0, im0, im1, mu, sigma, alpha, num_levels):
         Sanity check: pyramid[0] contains the finest level (highest resolution)
                       pyramid[-1] contains the coarsest level
     """
-    pyramid_im0 = [im0]
-    pyramid_im1 = [im1]
-    pyramid_d0 = [d0]
+    pyramid_im0, pyramid_im1, pyramid_d0 = [im0], [im1], [d0]
 
     for i in range(1, num_levels):
         pyramid_im0.append(signal.rescale(pyramid_im0[-1], 0.5, mode='reflect'))
