@@ -1,0 +1,37 @@
+1. Stereo_log_prior
+   - grad -=
+   - log_gaussian takes input of 2d
+
+2. shift_interpolated_disparity
+   - which function to use?
+   - TA says we need to do 'bi'linear/'bi'cubic interpolation
+     (https://moodle.tu-darmstadt.de/mod/forum/discuss.php?d=283316)
+   - need to test
+
+3. stereo_likelihood
+   - For gradient, x-derivative of image needed?
+     Ref: https://moodle.tu-darmstadt.de/mod/forum/discuss.php?d=283561
+          Slide 5, page 25
+   - Also, * -1 ?
+
+4. Stereo_log_posterior
+   - Should we apply alpha to gradient, too?
+
+5. optim_method
+   - How should we experiment/find the suitable method?
+   - Needs test
+
+6. Coarse2fine
+   - low resolution -> high resolution 순서로 진행?
+   - downsample/upsample 어떤 method를 쓸 것인가?
+   - upsample 한 뒤, scaling 어떻게?
+   - 0 padding?
+
+* Action Points
+   - Merge code
+      Problem1.py:
+      Problem2.py:
+   - Test interpolation method with small set of data
+     Compare with expected result
+   - Test different optimization method
+     See which gives highest log posterior / faster etc,.
