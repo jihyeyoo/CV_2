@@ -4,6 +4,7 @@ from scipy import interpolate   # Use this for interpolation
 from scipy import signal        # Feel free to use convolutions, if needed
 from scipy import optimize      # For gradient-based optimisation
 from PIL import Image           # For loading images
+from scipy.interpolate import interp2d
 
 # for experiments with different initialisation
 from problem1 import random_disparity
@@ -83,16 +84,16 @@ def shift_interpolated_disparity(im1, d):
           d: numpy.float 2d-array  disparity
     Returns:  im1_shifted
     """
-    H, W = im1.shape
-    shifted_im1= np.zeros(im1.shape, dtype=float)
-    for i in range(H):
-         for j in range(W):
-            new_j = j - int(d[i][j])
-            if new_j >= W or new_j < 0:
-                print("boundary exceeded!\n")
-                exit(-1)
-            shifted_im1[i][j] = im1[i][new_j]
-    return shifted_im1
+    x = np.arange(im1.shape[1])  #column
+    y = np.arange(im1.shape[0])  #row
+    x_new = x - d  # shifted columns based on disparity
+    
+    # Create interpolation function
+    interpolator = interp2d(x, y, im1, kind='linear', fill_value=0.0)
+    
+    # Perform interpolation
+    im1_shifted = interpolator(x_new, y)
+    return im1_shifted
 
 def stereo_log_likelihood(x, im0, im1, mu, sigma):
     """Evaluate gradient of log likelihood.=> logp(im0∣im1,d)
@@ -131,7 +132,7 @@ def optim_method():
     to work well.
     This is graded with 1 point unless the choice is arbitrary/poor.
     """
-    return None
+    return 'L-BFGS-B'
 
 def stereo(d0, im0, im1, mu, sigma, alpha, method=optim_method()):
     """Estimate disparity map
@@ -141,6 +142,21 @@ def stereo(d0, im0, im1, mu, sigma, alpha, method=optim_method()):
     Returns: d: numpy.float 2d-array estimated value of the disparity
         
     """
+    def stereo_log_posterior(d):
+        """Compute log-posterior and its gradient."""
+        # Implement the computation of log-posterior and gradient here
+        pass
+    
+    # Define objective function: negative log-posterior
+    def objective_function(d):
+        log_posterior, log_posterior_grad = stereo_log_posterior(d.reshape(d0.shape))
+        return -log_posterior, -log_posterior_grad.flatten()
+    
+    # Optimize using scipy.optimize.minimize
+    result = minimize(objective_function, d0.flatten(), method=method, jac=True)
+    
+    # Extract optimized disparity map
+    d = result.x.reshape(d0.shape)
 
     return d0
 
@@ -162,7 +178,21 @@ def coarse2fine(d0, im0, im1, mu, sigma, alpha, num_levels):
         Sanity check: pyramid[0] contains the finest level (highest resolution)
                       pyramid[-1] contains the coarsest level
     """
-    return []
+    pyramid = []
+    current_d = d0
+    
+    for level in range(num_levels):
+        # Perform stereo estimation at current resolution
+        current_d = stereo(current_d, im0, im1, mu, sigma, alpha)
+        pyramid.append(current_d)
+        
+        # Downsample images for the next level
+        im0 = downsample(im0)
+        im1 = downsample(im1)
+        
+        # Upscale current disparity map for initialization at the next level
+        current_d = upscale(current_d)
+    return pyramid
 
 # Example usage in main()
 # Feel free to experiment with your code in this function
