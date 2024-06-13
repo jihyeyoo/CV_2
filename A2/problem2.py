@@ -122,10 +122,9 @@ def shift_interpolated_disparity(im1, d):
     shifted_im1 = np.zeros(im1.shape)
     for i in range(im1.shape[0]):
         for j in range(im1.shape[1]):
-            new_j = int(j - d[i,j])
-            if new_j >= im1.shape[1]:
-                print(d[i,j])
-            shifted_im1[i][j] = bilinear_interpolate(i, new_j, im1)
+            new_j = j - d[i,j]
+            if new_j < im1.shape[1] - 1 and new_j >= 0:
+                shifted_im1[i][j] = bilinear_interpolate(i, new_j, im1)
 
             left = int(new_j)
             top = i
@@ -178,14 +177,14 @@ def stereo_log_posterior(d, im0, im1, mu, sigma, alpha):
         value: value of the log-posterior
         grad: gradient of the log-posterior w.r.t. x
     """
-    d = d.reshape(im0.shape)
+
     llh, llh_grad = stereo_log_likelihood(d, im0, im1, mu, sigma)
     prior, prior_grad = stereo_log_prior(d, mu, sigma)
 
     log_posterior = llh + alpha * prior
     log_posterior_grad = llh_grad + alpha * prior_grad
 
-    return log_posterior, log_posterior_grad.flatten()
+    return log_posterior, log_posterior_grad
 
 
 def optim_method():
@@ -195,6 +194,14 @@ def optim_method():
     This is graded with 1 point unless the choice is arbitrary/poor.
     """
     return 'L-BFGS-B'
+
+def negative_log_posterior(d, im0, im1, mu, sigma, alpha):
+
+    d = d.reshape(im0.shape)
+    log_post, log_post_grad = stereo_log_posterior(d, im0, im1, mu, sigma, alpha)
+
+    return log_post * -1, log_post_grad.flatten() * -1
+
 
 def stereo(d0, im0, im1, mu, sigma, alpha, method=optim_method()):
     """Estimating the disparity map
@@ -208,8 +215,10 @@ def stereo(d0, im0, im1, mu, sigma, alpha, method=optim_method()):
         d: numpy.float 2d-array estimated value of the disparity
     """
 
-    d0 = optimize.minimize(stereo_log_posterior, d0.flatten(), jac=True, method=method, args=(im0, im1, mu, sigma, alpha))
-    return d0
+    result = optimize.minimize(negative_log_posterior, d0.flatten(), jac=True, method=method, args=(im0, im1, mu, sigma, alpha))
+    d = result.x.reshape(im0.shape)
+
+    return d
 
 def coarse2fine(d0, im0, im1, mu, sigma, alpha, num_levels):
     """Coarse-to-fine estimation strategy. Basic idea:
@@ -233,13 +242,11 @@ def coarse2fine(d0, im0, im1, mu, sigma, alpha, num_levels):
     from scipy import ndimage
 
 
-
-
-    def downsample2(img, f):
+    def downsample2(img):
 
         # convolve image and gauss filter
-        smooth_img = signal.convolve(img, f, mode="mirror")
-
+        # smooth_img = signal.convolve(img, f, mode='same')
+        smooth_img = ndimage.gaussian_filter(img, sigma = 1.5, mode = 'constant', cval = 0)
         # take every other row/column
         downsampled = np.zeros((int(img.shape[0] / 2), int(img.shape[1] / 2)))
         h, w = downsampled.shape
@@ -251,32 +258,28 @@ def coarse2fine(d0, im0, im1, mu, sigma, alpha, num_levels):
         return downsampled
 
     # fill the pyramid first
-    pyr_d = [d0]
-    pyr_im0 = [im0]
-    pyr_im1 = [im1]
-    d = d0
-    i0 = im0
-    i1 = im1
-    for i in range(num_levels):
-        d_f = ndimage.gaussian_filter(d, 1.5, mode='mirror')
-        i0_f = ndimage.gaussian_filter(i0, 1.5, mode='mirror')
-        i1_f = ndimage.gaussian_filter(i1, 1.5, mode='mirror')
+    pyr_d, pyr_im0, pyr_im1 = [d0], [im0], [im1]
+    d, i0, i1 = d0, im0, im1
 
-        d = downsample2(d, d_f)
-        i0 = downsample2(i0, i0_f)
-        i1 = downsample2(i1, i1_f)
+    for i in range(num_levels - 1):
+        # d_f = ndimage.gaussian_filter(d, 1.5, mode='reflect')
+        # i0_f = ndimage.gaussian_filter(i0, 1.5, mode='reflect')
+        # i1_f = ndimage.gaussian_filter(i1, 1.5, mode='reflect')
+
+        d, i0, i1 = downsample2(d), downsample2(i0), downsample2(i1)
 
         pyr_d.append(d)
         pyr_im0.append(i0)
         pyr_im1.append(i1)
 
     # do the iteration
-    d = d0
-    for i in range(num_levels):
-        d = stereo(d, pyr_im0[-i], pyr_im1[-i], mu, sigma, alpha)
-        pyr_d[-i] = d
+    d = pyr_d[num_levels - 1]
+    for i in range(num_levels-1, -1, -1):
+        d = stereo(d, pyr_im0[i], pyr_im1[i], mu, sigma, alpha)
+        pyr_d[i] = d
         # upscale the disparity map
         d = ndimage.zoom(d, 2, order=3)
+        pp = d.shape()
 
     return pyr_d
 
@@ -298,8 +301,8 @@ def main():
 
     # initial disparity map
     # experiment with constant/random values
-    d0 = gt
-    #d0 = random_disparity(gt.shape)
+    #d0 = gt
+    d0 = random_disparity(gt.shape)
     #d0 = constant_disparity(gt.shape, 6)
 
     # Display stereo: Initialized with noise
@@ -307,7 +310,7 @@ def main():
 
     # Pyramid
     num_levels = 3
-    pyramid = coarse2fine(d0, im0, im1, mu, sigma, num_levels)
+    #pyramid = coarse2fine(d0, im0, im1, mu, sigma, alpha, num_levels)
 
 if __name__ == "__main__":
     main()
