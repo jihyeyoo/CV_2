@@ -11,12 +11,8 @@ from problem1 import constant_disparity
 
 def rgb2gray(rgb):
     """Converting RGB image to greyscale.
-    Args:
-        rgb: numpy array of shape (H, W, 3)
-
-    Returns:
-        gray: numpy array of shape (H, W)
-
+    Args: rgb: numpy array of shape (H, W, 3)
+    Returns: gray: numpy array of shape (H, W)
     """
     height, width = rgb.shape[:2]
     gray = np.zeros((height, width), dtype=np.float64)
@@ -58,24 +54,26 @@ def stereo_log_prior(x, mu, sigma):
     Returns: value: value of the log-prior
              grad: gradient of the log-prior w.r.t. x
     """
-    H, W = x.shape
+    # log prior
     value = 0.0
+    # array to store grad
     grad = np.zeros_like(x)
-    
-    for i in range(H):
-        for j in range(W - 1):
-            v, g = log_gaussian(x[i, j + 1] - x[i, j], mu, sigma)
-            value += v
-            grad[i, j] -= g
-            grad[i, j + 1] += g
-    
-    for i in range(H - 1):
-        for j in range(W):
-            v, g = log_gaussian(x[i + 1, j] - x[i, j], mu, sigma)
-            value += v
-            grad[i, j] -= g
-            grad[i + 1, j] += g
 
+    for i in range(x.shape[0]):
+        for j in range(x.shape[1]):
+            if i > 0: # except first row 
+                diff=x[i, j] - x[i-1, j]
+                v, g = log_gaussian(diff, mu, sigma)
+                value += v
+                grad[i, j] += g
+                grad[i-1, j] -= g # for top pixel 
+            if j > 0: # except first column
+                diff=x[i, j] - x[i, j-1]
+                v, g = log_gaussian(diff, mu, sigma)
+                value += v
+                grad[i, j] += g
+                grad[i, j-1] -= g # for left pixel
+    
     return  value, grad
 
 def shift_interpolated_disparity(im1, d):
