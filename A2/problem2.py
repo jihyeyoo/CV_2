@@ -6,6 +6,7 @@ from scipy import optimize      # For gradient-based optimisation
 from PIL import Image           # For loading images
 from scipy.optimize import minimize
 from scipy.interpolate import RegularGridInterpolator
+import matplotlib.pyplot as plt
 
 # for experiments with different initialisation
 from problem1 import random_disparity
@@ -220,6 +221,7 @@ def coarse2fine(d0, im0, im1, mu, sigma, alpha, num_levels):
         pyr_d[i] = d
         # upscale the disparity map
         d = ndimage.zoom(d, 2, order=3)
+        
 
     return pyr_d
 
@@ -238,18 +240,58 @@ def main():
     # experiment with other values of alpha
     alpha = 1.0
 
-    # initial disparity map
-    # experiment with constant/random values
-    d0 = gt
-    #d0 = random_disparity(gt.shape)
-    #d0 = constant_disparity(gt.shape, 6)
+    # Initial disparity maps
+    d_gt_init = gt
+    d_const_init = np.full_like(gt, 8)
+    d_rand_init = np.random.uniform(0, 14, gt.shape)
 
     # Display stereo: Initialized with noise
-    disparity = stereo(d0, im0, im1, mu, sigma, alpha)
+    disparity_gt = stereo(d_gt_init, im0, im1, mu, sigma, alpha)
+    disparity_const = stereo(d_const_init, im0, im1, mu, sigma, alpha)
+    disparity_rand = stereo(d_rand_init, im0, im1, mu, sigma, alpha)
 
     # Pyramid
     num_levels = 3
-    pyramid = coarse2fine(d0, im0, im1, mu, sigma, alpha, num_levels)
+    pyramid_gt = coarse2fine(d_gt_init, im0, im1, mu, sigma, alpha, num_levels)
+    pyramid_const = coarse2fine(d_const_init, im0, im1, mu, sigma, alpha, num_levels)
+    pyramid_rand = coarse2fine(d_rand_init, im0, im1, mu, sigma, alpha, num_levels)
+
+    # Final disparities from the finest level of the pyramid
+    d_gt = pyramid_gt[0]
+    d_const = pyramid_const[0]
+    d_rand = pyramid_rand[0]
+
+    # Visualize results
+    fig, axs = plt.subplots(3, 3, figsize=(10, 10))
+
+    axs[0, 0].imshow(gt, cmap='gray')
+    axs[0, 0].set_title('Ground Truth Disparity')
+
+    axs[0, 1].imshow(d_gt, cmap='gray')
+    axs[0, 1].set_title('Estimated Disparity (GT Init)')
+
+    axs[0, 2].imshow(np.abs(gt - d_gt), cmap='gray')
+    axs[0, 2].set_title('Difference (GT)')
+
+    axs[1, 0].imshow(gt, cmap='gray')
+    axs[1, 0].set_title('Ground Truth Disparity')
+
+    axs[1, 1].imshow(d_const, cmap='gray')
+    axs[1, 1].set_title('Estimated Disparity (Const Init)')
+
+    axs[1, 2].imshow(np.abs(gt - d_const), cmap='gray')
+    axs[1, 2].set_title('Difference (Const)')
+
+    axs[2, 0].imshow(gt, cmap='gray')
+    axs[2, 0].set_title('Ground Truth Disparity')
+
+    axs[2, 1].imshow(d_rand, cmap='gray')
+    axs[2, 1].set_title('Estimated Disparity (Rand Init)')
+
+    axs[2, 2].imshow(np.abs(gt - d_rand), cmap='gray')
+    axs[2, 2].set_title('Difference (Rand)')
+
+    plt.show()
 
 if __name__ == "__main__":
     main()
