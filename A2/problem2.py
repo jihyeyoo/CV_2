@@ -319,19 +319,5 @@ def main():
 
     plt.show()
 
-# Test
-a = np.array([
-    [0, 1, 2, 3, 4],
-    [5, 6, 7, 8, 9]
-], dtype=np.float64)
-
-interpolator = interpolate.RegularGridInterpolator((np.arange(a.shape[0]), np.arange(a.shape[1])), a, bounds_error=False, fill_value=0)
-
-value_at_0_3_5 = interpolator([0, 3.5])
-value_at_1_0_3 = interpolator([1, 0.3])
-
-print(f"Interpolated value at [0, 3.5]: {value_at_0_3_5}")
-print(f"Interpolated value at [1, 0.3]: {value_at_1_0_3}")
-
 if __name__ == "__main__":
     main()
