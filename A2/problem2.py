@@ -9,6 +9,7 @@ from PIL import Image           # For loading images
 from problem1 import random_disparity
 from problem1 import constant_disparity
 
+import matplotlib.pyplot as plt
 
 def rgb2gray(rgb):
     """Converting RGB image to greyscale.
@@ -79,25 +80,19 @@ def stereo_log_prior(x, mu, sigma):
         value: value of the log-prior
         grad: gradient of the log-prior w.r.t. x
     """
-    H, W = x.shape
-    logp = 0
-    grad = np.zeros_like(x)
+    dh = x[:, 1:] - x[:, :-1]
+    dv = x[1:, :] - x[:-1, :]
 
-    # Compute horizontal potentials and gradients
-    for i in range(H):
-        for j in range(W-1):
-            val, gradient = log_gaussian(x[i, j+1] - x[i, j], mu, sigma)
-            value += val
-            grad[i, j] -= gradient
-            grad[i, j + 1] += gradient
+    fh, gradient_h = log_gaussian(dh, mu, sigma)
+    fv, gradient_v = log_gaussian(dv, mu, sigma)
 
-    # Compute vertical potentials and gradients
-    for i in range(H-1):
-        for j in range(W):
-            val, gradient = log_gaussian(x[i + 1, j] - x[i, j], mu, sigma)
-            value += val
-            grad[i, j] -= gradient
-            grad[i + 1, j] += gradient
+    value = np.sum(fh) + np.sum(fv)
+    grad = np.zeros(x.shape)
+
+    grad[:, :-1] += gradient_h
+    grad[:, 1:] += gradient_h
+    grad[:-1, :] += gradient_v
+    grad[1:, :] += gradient_v
 
     return  value, grad
 
@@ -113,7 +108,7 @@ def shift_interpolated_disparity(im1, d):
         im1_shifted: Shifted version of im1 by the disparity value.
     """
     H, W = im1.shape
-    coords = np.array(np.meshgrid(np.arange(H), np.arange(W), indexing='ij'))
+    coords = np.array(np.meshgrid(np.arange(H), np.arange(W), indexing='ij'), dtype=np.float64)
     coords[1] -= d
     interpolator = interpolate.RegularGridInterpolator((np.arange(H), np.arange(W)), im1, bounds_error=False, fill_value=0)
     shifted_im1 = interpolator(coords.transpose(1, 2, 0))
@@ -135,8 +130,16 @@ def stereo_log_likelihood(x, im0, im1, mu, sigma):
     Hint: Make use of shift_interpolated_disparity and log_gaussian
     """
     shifted_im1 = shift_interpolated_disparity(im1, x)
-    diff =  im0 - shifted_im1
-    value, grad = log_gaussian(diff, mu, sigma)
+    log_likelihood, grad_log_likelihood = log_gaussian(im0 - shifted_im1, mu, sigma)
+
+    sobel = [
+        [0, 0, 0],
+        [0.5, 0, -0.5],
+        [0, 0, 0]
+    ]
+    im1_x_drv = signal.convolve(shifted_im1, sobel, mode='same')
+    grad = grad_log_likelihood * im1_x_drv * -1
+    value = log_likelihood.sum()
 
     return value, grad
 
@@ -187,6 +190,7 @@ def stereo(d0, im0, im1, mu, sigma, alpha, method=optim_method()):
     
     result = optimize.minimize(objective, d0.flatten(), jac=True, method=method)
     d = result.x.reshape(d0.shape)
+
     return d
 
 def coarse2fine(d0, im0, im1, mu, sigma, alpha, num_levels):
@@ -207,29 +211,49 @@ def coarse2fine(d0, im0, im1, mu, sigma, alpha, num_levels):
         Sanity check: pyramid[0] contains the finest level (highest resolution)
                       pyramid[-1] contains the coarsest level
     """
-    pyramid_im0, pyramid_im1, pyramid_d0 = [im0], [im1], [d0]
+    from scipy import ndimage
 
-    for i in range(1, num_levels):
-        pyramid_im0.append(signal.rescale(pyramid_im0[-1], 0.5, mode='reflect'))
-        pyramid_im1.append(signal.rescale(pyramid_im1[-1], 0.5, mode='reflect'))
-        pyramid_d0.append(signal.rescale(pyramid_d0[-1], 0.5, mode='reflect') / 2)
+    def downsample2(img):
 
-    pyramid_d0.reverse()
-    pyramid_im0.reverse()
-    pyramid_im1.reverse()
-    
-    disparity_pyramid = []
+        # convolve image and gauss filter
+        # smooth_img = signal.convolve(img, f, mode='same')
+        smooth_img = ndimage.gaussian_filter(img, sigma = 1.5, mode = 'constant', cval = 0)
+        # take every other row/column
+        downsampled = np.zeros((int(img.shape[0] / 2), int(img.shape[1] / 2)))
+        h, w = downsampled.shape
 
-    d = pyramid_d0[0]
-    for i in range(num_levels):
-        d = stereo(d, pyramid_im0[i], pyramid_im1[i], mu, sigma, alpha)
-        if i < num_levels - 1:
-            d = signal.rescale(d, pyramid_im0[i + 1].shape, mode='reflect') * 2
-        disparity_pyramid.append(d)
-    
-    disparity_pyramid.reverse()
+        for i in range(h):
+            for j in range(w):
+                downsampled[i, j] = smooth_img[i * 2, j * 2]
 
-    return disparity_pyramid
+        return downsampled
+
+    # fill the pyramid first
+    pyr_d, pyr_im0, pyr_im1 = [d0], [im0], [im1]
+    d, i0, i1 = d0, im0, im1
+
+    for i in range(num_levels - 1):
+        # d_f = ndimage.gaussian_filter(d, 1.5, mode='reflect')
+        # i0_f = ndimage.gaussian_filter(i0, 1.5, mode='reflect')
+        # i1_f = ndimage.gaussian_filter(i1, 1.5, mode='reflect')
+
+        d, i0, i1 = downsample2(d), downsample2(i0), downsample2(i1)
+
+        pyr_d.append(d)
+        pyr_im0.append(i0)
+        pyr_im1.append(i1)
+
+    # do the iteration
+    d = pyr_d[num_levels - 1]
+    for i in range(num_levels-1, -1, -1):
+        d = stereo(d, pyr_im0[i], pyr_im1[i], mu, sigma, alpha)
+        pyr_d[i] = d
+        # upscale the disparity map
+        if i > 0:
+            d = ndimage.zoom(d, 2, order=3)
+            d = d[:pyr_d[i - 1].shape[0], :pyr_d[i - 1].shape[1]]
+        
+    return pyr_d
 
 # Example usage in main()
 # Feel free to experiment with your code in this function
@@ -247,18 +271,67 @@ def main():
     # experiment with other values of alpha
     alpha = 1.0
 
-    # initial disparity map
-    # experiment with constant/random values
-    d0 = gt
-    #d0 = random_disparity(gt.shape)
-    #d0 = constant_disparity(gt.shape, 6)
+    d_gt_init = gt
+    d_const_init =  constant_disparity(gt.shape, 8)
+    d_rand_init = random_disparity(gt.shape)
 
-    # Display stereo: Initialized with noise
-    disparity = stereo(d0, im0, im1, mu, sigma, alpha)
+    disparity_gt = stereo(d_gt_init, im0, im1, mu, sigma, alpha)
+    disparity_const = stereo(d_const_init, im0, im1, mu, sigma, alpha)
+    disparity_rand = stereo(d_rand_init, im0, im1, mu, sigma, alpha)
 
-    # Pyramid
     num_levels = 3
-    pyramid = coarse2fine(d0, im0, im1, mu, sigma, num_levels)
+    pyramid_gt = coarse2fine(d_gt_init, im0, im1, mu, sigma, alpha, num_levels)
+    pyramid_const = coarse2fine(d_const_init, im0, im1, mu, sigma, alpha, num_levels)
+    pyramid_rand = coarse2fine(d_rand_init, im0, im1, mu, sigma, alpha, num_levels)
+
+    d_gt = pyramid_gt[0]
+    d_const = pyramid_const[0]
+    d_rand = pyramid_rand[0]
+
+    fig, axs = plt.subplots(3, 3, figsize=(10, 10))
+
+    axs[0, 0].imshow(gt, cmap='gray')
+    axs[0, 0].set_title('Ground Truth Disparity')
+
+    axs[0, 1].imshow(d_gt, cmap='gray')
+    axs[0, 1].set_title('Estimated Disparity (GT Init)')
+
+    axs[0, 2].imshow(np.abs(gt - d_gt), cmap='gray')
+    axs[0, 2].set_title('Difference (GT)')
+
+    axs[1, 0].imshow(gt, cmap='gray')
+    axs[1, 0].set_title('Ground Truth Disparity')
+
+    axs[1, 1].imshow(d_const, cmap='gray')
+    axs[1, 1].set_title('Estimated Disparity (Const Init)')
+
+    axs[1, 2].imshow(np.abs(gt - d_const), cmap='gray')
+    axs[1, 2].set_title('Difference (Const)')
+
+    axs[2, 0].imshow(gt, cmap='gray')
+    axs[2, 0].set_title('Ground Truth Disparity')
+
+    axs[2, 1].imshow(d_rand, cmap='gray')
+    axs[2, 1].set_title('Estimated Disparity (Rand Init)')
+
+    axs[2, 2].imshow(np.abs(gt - d_rand), cmap='gray')
+    axs[2, 2].set_title('Difference (Rand)')
+
+    plt.show()
+
+# Test
+a = np.array([
+    [0, 1, 2, 3, 4],
+    [5, 6, 7, 8, 9]
+], dtype=np.float64)
+
+interpolator = interpolate.RegularGridInterpolator((np.arange(a.shape[0]), np.arange(a.shape[1])), a, bounds_error=False, fill_value=0)
+
+value_at_0_3_5 = interpolator([0, 3.5])
+value_at_1_0_3 = interpolator([1, 0.3])
+
+print(f"Interpolated value at [0, 3.5]: {value_at_0_3_5}")
+print(f"Interpolated value at [1, 0.3]: {value_at_1_0_3}")
 
 if __name__ == "__main__":
     main()
