@@ -50,7 +50,7 @@ def shift_interpolated_disparity(im1, d):
     x = np.arange(im1.shape[1])  # column
     y = np.arange(im1.shape[0])  # row 
 
-    # Interpolation function
+    # interpolation function
     interpolator = RegularGridInterpolator((y, x), im1, bounds_error=False, fill_value=0.0)
 
     coords = []
@@ -63,15 +63,12 @@ def shift_interpolated_disparity(im1, d):
     
     return im1_shifted
 
-# Example usage for testing
 if __name__ == "__main__":
-    # Generate a sample image
     im0, im1, gt = load_data('./data/i0.png', './data/i1.png', './data/gt.png')
     im0, im1 = rgb2gray(im0), rgb2gray(im1)
 
     d = constant_disparity(gt.shape, 6)
 
-    # Shift the image
     im1_shifted = shift_interpolated_disparity(im1, d)
 
     plt.figure(figsize=(8, 8))
