@@ -65,6 +65,7 @@ def log_gaussian(x,  mu, sigma):
         grad: gradient of the log-density w.r.t. x
     """
     value = - (x - mu)**2 / (2*sigma**2)
+    value = np.sum(value)
     grad = - (x - mu) / sigma**2
     return value, grad
 
@@ -85,7 +86,7 @@ def stereo_log_prior(x, mu, sigma):
     fh, gradient_h = log_gaussian(dh, mu, sigma)
     fv, gradient_v = log_gaussian(dv, mu, sigma)
 
-    value = np.sum(fh) + np.sum(fv)
+    value = fh + fv
     grad = np.zeros(x.shape)
 
     grad[:, :-1] += gradient_h
@@ -139,7 +140,7 @@ def stereo_log_likelihood(x, im0, im1, mu, sigma):
     ]
     im1_x_drv = signal.convolve(im1_shifted, sobel, mode='same')
     grad = llh_grad * im1_x_drv * -1
-    value = llh.sum()
+    value = llh
     return value, grad
 
 
