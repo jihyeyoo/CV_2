@@ -171,7 +171,7 @@ def optim_method():
     to work well.
     This is graded with 1 point unless the choice is arbitrary/poor.
     """
-    return 'L-BFGS-B'
+    return 'Powell'
 
 def negative_log_posterior(d, im0, im1, mu, sigma, alpha):
 
@@ -263,7 +263,6 @@ def coarse2fine(d0, im0, im1, mu, sigma, alpha, num_levels):
 # but make sure your final submission can execute this code
 def main():
 
-
     # these are the same functions from Assignment 1
     im0, im1, gt = load_data('./data/i0.png', './data/i1.png', './data/gt.png')
     im0, im1 = rgb2gray(im0), rgb2gray(im1)
@@ -301,19 +300,15 @@ def main():
         d_rand = pyramid_rand[0]
 
     mse_gt = np.mean((gt - d_gt) ** 2)
-    mae_gt = np.mean(np.abs(gt - d_gt))
     print(f'MSE (GT Init): {mse_gt}')
-    print(f'MAE (GT Init): {mae_gt}')
 
     mse_const = np.mean((gt - d_const) ** 2)
     mae_const = np.mean(np.abs(gt - d_const))
     print(f'MSE (Const Init): {mse_const}')
-    print(f'MAE (Const Init): {mae_const}')
 
     mse_rand = np.mean((gt - d_rand) ** 2)
     mae_rand = np.mean(np.abs(gt - d_rand))
     print(f'MSE (Rand Init): {mse_rand}')
-    print(f'MAE (Rand Init): {mae_rand}')
 
     # Visualize results
     fig, axs = plt.subplots(3, 3, figsize=(10, 10))
