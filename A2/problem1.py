@@ -1,3 +1,10 @@
+'''
+Authors:
+Group #13
+- Jinjoo Ha (jinjoo.ha@stud.tu-darmstadt.de)
+- Jihye Yoo (gudong0918@ewhain.net)
+- Hyewon Joo (joohw1004@ewhain.net)
+'''
 from PIL import Image
 import numpy as np
 np.random.seed(seed=2024)

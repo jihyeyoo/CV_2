@@ -1,3 +1,10 @@
+'''
+Authors:
+Group #13
+- Jinjoo Ha (jinjoo.ha@stud.tu-darmstadt.de)
+- Jihye Yoo (gudong0918@ewhain.net)
+- Hyewon Joo (joohw1004@ewhain.net)
+'''
 import numpy as np
 
 from scipy import interpolate   # Use this for interpolation
